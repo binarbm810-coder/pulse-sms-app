@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private authenticated user profile storing phone number and unique account name. Clients must submit FieldValue.serverTimestamp() for timestamps.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the owner." },
+        "accountName": { "type": "string", "description": "Unique display account name (2-40 chars)." },
+        "phoneNumber": { "type": "string", "description": "User-entered phone number." },
+        "phoneNormalized": { "type": "string", "description": "Normalized digits phone identifier." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "accountName", "phoneNumber", "phoneNormalized", "createdAt", "updatedAt"]
+    },
+    "UserDirectoryEntry": {
+      "title": "UserDirectoryEntry",
+      "description": "Public discovery card with masked phone and SHA-256 phone hash (no raw PII). Clients must submit FieldValue.serverTimestamp() for createdAt and updatedAt.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID." },
+        "accountName": { "type": "string", "description": "Display account name." },
+        "accountNameLower": { "type": "string", "description": "Lowercase account name for prefix discovery." },
+        "phoneMasked": { "type": "string", "description": "Masked phone suffix for visual confirmation." },
+        "phoneSha256": { "type": "string", "description": "64-char SHA-256 hex hash of normalized phone number." },
+        "discoverable": { "type": "boolean", "description": "Whether account can be discovered." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "accountName", "accountNameLower", "phoneMasked", "phoneSha256", "discoverable", "createdAt", "updatedAt"]
+    },
+    "ContactEntry": {
+      "title": "ContactEntry",
+      "description": "Owner-scoped saved friend contact under /users/{userId}/contacts.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID." },
+        "contactUid": { "type": "string", "description": "Friend UID." },
+        "accountName": { "type": "string", "description": "Friend account name." },
+        "phoneMasked": { "type": "string", "description": "Masked phone number." },
+        "phoneSha256": { "type": "string", "description": "Friend normalized phone SHA-256 hash." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "contactUid", "accountName", "phoneMasked", "phoneSha256", "createdAt", "updatedAt"]
+    },
+    "ChatThread": {
+      "title": "ChatThread",
+      "description": "Two-party SMS and Basic-Mode Photo thread metadata.",
+      "type": "object",
+      "properties": {
+        "participantIds": { "type": "array", "description": "Sorted 2-element list of participant UIDs." },
+        "participantNames": { "type": "array", "description": "Parallel 2-element list of participant names." },
+        "lastMessagePreview": { "type": "string", "description": "Compact preview text." },
+        "lastSenderId": { "type": "string", "description": "UID of the last sender." },
+        "lastMessageAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participantIds", "participantNames", "lastMessagePreview", "lastSenderId", "lastMessageAt", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Lightweight SMS or Tap-to-Load photo notice message.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string", "description": "Sender UID." },
+        "senderName": { "type": "string", "description": "Sender account name." },
+        "participantIds": { "type": "array", "description": "Denormalized 2-element participant UIDs." },
+        "type": { "type": "string", "enum": ["text", "photo"], "description": "Message payload kind." },
+        "textBody": { "type": "string", "description": "SMS body or photo caption." },
+        "transport": { "type": "string", "description": "Transport used (mqtt_firestore, firestore, offline_flush)." },
+        "payloadBytes": { "type": "integer", "description": "Wire payload byte count." },
+        "photoPayloadId": { "type": "string", "description": "Optional reference to /photo_payloads doc." },
+        "photoSizeBytes": { "type": "integer", "description": "Compressed WebP binary size in bytes." },
+        "photoWidth": { "type": "integer", "description": "Compressed WebP width." },
+        "photoHeight": { "type": "integer", "description": "Compressed WebP height." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "senderName", "participantIds", "type", "textBody", "transport", "payloadBytes", "createdAt"]
+    },
+    "PhotoPayload": {
+      "title": "PhotoPayload",
+      "description": "Ultra-compressed <=25KB WebP photo payload fetched only when receiver taps View Photo.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "threadId": { "type": "string" },
+        "participantIds": { "type": "array" },
+        "webpBase64": { "type": "string", "description": "Base64-encoded WebP bytes (max 40000 chars)." },
+        "sizeBytes": { "type": "integer" },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "threadId", "participantIds", "webpBase64", "sizeBytes", "width", "height", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Owner-only private profile containing phone number."
+    },
+    "/users/{userId}/contacts/{contactId}": {
+      "schema": { "$ref": "#/entities/ContactEntry" },
+      "description": "Owner-only saved friend contacts."
+    },
+    "/user_directory/{entryId}": {
+      "schema": { "$ref": "#/entities/UserDirectoryEntry" },
+      "description": "Low-data friend discovery cards with hashed phone lookup and zero raw PII."
+    },
+    "/threads/{threadId}": {
+      "schema": { "$ref": "#/entities/ChatThread" },
+      "description": "Two-party conversation thread metadata."
+    },
+    "/threads/{threadId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Append-only lightweight SMS and Tap-to-Load photo notice messages."
+    },
+    "/photo_payloads/{payloadId}": {
+      "schema": { "$ref": "#/entities/PhotoPayload" },
+      "description": "On-demand 15KB-25KB WebP photo payloads fetched only on tap."
+    }
+  }
+}

@@ -1,0 +1,243 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidParticipantPair(list) {
+      return list is list &&
+             list.size() == 2 &&
+             list[0] is string && isValidId(list[0]) &&
+             list[1] is string && isValidId(list[1]) &&
+             list[0] != list[1];
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.accountName is string && data.accountName.size() >= 2 && data.accountName.size() <= 40 &&
+             data.phoneNumber is string && data.phoneNumber.size() >= 6 && data.phoneNumber.size() <= 24 &&
+             data.phoneNormalized is string && data.phoneNormalized.size() >= 6 && data.phoneNormalized.size() <= 20 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidDirectoryEntry(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.accountName is string && data.accountName.size() >= 2 && data.accountName.size() <= 40 &&
+             data.accountNameLower is string && data.accountNameLower.size() >= 2 && data.accountNameLower.size() <= 40 &&
+             data.phoneMasked is string && data.phoneMasked.size() >= 4 && data.phoneMasked.size() <= 30 &&
+             data.phoneSha256 is string && data.phoneSha256.size() == 64 &&
+             data.discoverable is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidContactEntry(data) {
+      return data.userId is string && isValidId(data.userId) &&
+             data.contactUid is string && isValidId(data.contactUid) &&
+             data.accountName is string && data.accountName.size() >= 2 && data.accountName.size() <= 40 &&
+             data.phoneMasked is string && data.phoneMasked.size() >= 4 && data.phoneMasked.size() <= 30 &&
+             data.phoneSha256 is string && data.phoneSha256.size() == 64 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidThread(data) {
+      return isValidParticipantPair(data.participantIds) &&
+             data.participantNames is list && data.participantNames.size() == 2 &&
+             data.participantNames[0] is string && data.participantNames[0].size() >= 1 && data.participantNames[0].size() <= 40 &&
+             data.participantNames[1] is string && data.participantNames[1].size() >= 1 && data.participantNames[1].size() <= 40 &&
+             data.lastMessagePreview is string && data.lastMessagePreview.size() <= 200 &&
+             data.lastSenderId is string && isValidId(data.lastSenderId) &&
+             (data.lastSenderId in data.participantIds) &&
+             data.lastMessageAt is timestamp && data.lastMessageAt <= request.time &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidMessage(data) {
+      return data.senderId is string && isValidId(data.senderId) &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 40 &&
+             isValidParticipantPair(data.participantIds) &&
+             (data.senderId in data.participantIds) &&
+             data.type is string && (data.type == 'text' || data.type == 'photo') &&
+             data.textBody is string && data.textBody.size() <= 1000 &&
+             data.transport is string && data.transport.size() >= 2 && data.transport.size() <= 30 &&
+             data.payloadBytes is int && data.payloadBytes >= 0 && data.payloadBytes <= 65536 &&
+             (!('photoPayloadId' in data) || (data.photoPayloadId is string && data.photoPayloadId.size() <= 128)) &&
+             (!('photoSizeBytes' in data) || (data.photoSizeBytes is int && data.photoSizeBytes >= 0 && data.photoSizeBytes <= 26000)) &&
+             (!('photoWidth' in data) || (data.photoWidth is int && data.photoWidth >= 0 && data.photoWidth <= 2048)) &&
+             (!('photoHeight' in data) || (data.photoHeight is int && data.photoHeight >= 0 && data.photoHeight <= 2048)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidPhotoPayload(data) {
+      return data.senderId is string && isValidId(data.senderId) &&
+             data.threadId is string && isValidId(data.threadId) &&
+             isValidParticipantPair(data.participantIds) &&
+             (data.senderId in data.participantIds) &&
+             data.webpBase64 is string && data.webpBase64.size() >= 8 && data.webpBase64.size() <= 40000 &&
+             data.sizeBytes is int && data.sizeBytes >= 1 && data.sizeBytes <= 26000 &&
+             data.width is int && data.width >= 1 && data.width <= 2048 &&
+             data.height is int && data.height >= 1 && data.height <= 2048 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    // 1. Private User Profile (owner-only PII)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'accountName', 'phoneNumber', 'phoneNormalized', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'accountName', 'phoneNumber', 'phoneNormalized', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['accountName', 'phoneNumber', 'phoneNormalized', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+
+      // Owner-scoped saved contacts
+      match /contacts/{contactId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(contactId) && request.auth.uid == userId;
+        allow list: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(userId) &&
+                         isValidId(contactId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().contactUid == contactId &&
+                         incoming().keys().hasAll(['userId', 'contactUid', 'accountName', 'phoneMasked', 'phoneSha256', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'contactUid', 'accountName', 'phoneMasked', 'phoneSha256', 'createdAt', 'updatedAt']) &&
+                         isValidContactEntry(incoming());
+
+        allow update: if isSignedIn() &&
+                         isValidId(userId) &&
+                         isValidId(contactId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().contactUid == existing().contactUid &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidContactEntry(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['accountName', 'phoneMasked', 'phoneSha256', 'updatedAt']);
+
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(contactId) && request.auth.uid == userId;
+      }
+    }
+
+    // 2. Public Discovery Directory (masked phone + SHA-256 phone hash only, zero raw PII)
+    match /user_directory/{entryId} {
+      allow get: if isSignedIn() && isValidId(entryId);
+      allow list: if isSignedIn() && resource.data.discoverable == true;
+
+      allow create: if isSignedIn() &&
+                       isValidId(entryId) &&
+                       request.auth.uid == entryId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'accountName', 'accountNameLower', 'phoneMasked', 'phoneSha256', 'discoverable', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'accountName', 'accountNameLower', 'phoneMasked', 'phoneSha256', 'discoverable', 'createdAt', 'updatedAt']) &&
+                       isValidDirectoryEntry(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(entryId) &&
+                       request.auth.uid == entryId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidDirectoryEntry(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['accountName', 'accountNameLower', 'phoneMasked', 'phoneSha256', 'discoverable', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(entryId) && request.auth.uid == entryId;
+    }
+
+    // 3. Conversation Threads (participant-isolated)
+    match /threads/{threadId} {
+      allow get: if isSignedIn() && isValidId(threadId) && (request.auth.uid in resource.data.participantIds);
+      allow list: if isSignedIn() && (request.auth.uid in resource.data.participantIds);
+
+      allow create: if isSignedIn() &&
+                       isValidId(threadId) &&
+                       (request.auth.uid in incoming().participantIds) &&
+                       incoming().lastSenderId == request.auth.uid &&
+                       incoming().keys().hasAll(['participantIds', 'participantNames', 'lastMessagePreview', 'lastSenderId', 'lastMessageAt', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['participantIds', 'participantNames', 'lastMessagePreview', 'lastSenderId', 'lastMessageAt', 'createdAt', 'updatedAt']) &&
+                       isValidThread(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(threadId) &&
+                       (request.auth.uid in existing().participantIds) &&
+                       incoming().participantIds == existing().participantIds &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().lastSenderId == request.auth.uid &&
+                       isValidThread(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['participantNames', 'lastMessagePreview', 'lastSenderId', 'lastMessageAt', 'updatedAt']);
+
+      allow delete: if false;
+
+      // Append-only lightweight SMS / Tap-to-Load Photo Notice messages
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(threadId) && isValidId(messageId) && (request.auth.uid in resource.data.participantIds);
+        allow list: if isSignedIn() && isValidId(threadId) && (request.auth.uid in resource.data.participantIds);
+
+        allow create: if isSignedIn() &&
+                         isValidId(threadId) &&
+                         isValidId(messageId) &&
+                         incoming().senderId == request.auth.uid &&
+                         (request.auth.uid in incoming().participantIds) &&
+                         incoming().keys().hasAll(['senderId', 'senderName', 'participantIds', 'type', 'textBody', 'transport', 'payloadBytes', 'createdAt']) &&
+                         incoming().keys().hasOnly(['senderId', 'senderName', 'participantIds', 'type', 'textBody', 'transport', 'payloadBytes', 'photoPayloadId', 'photoSizeBytes', 'photoWidth', 'photoHeight', 'createdAt']) &&
+                         isValidMessage(incoming()) &&
+                         existsAfter(/databases/$(database)/documents/threads/$(threadId)) &&
+                         incoming().participantIds == getAfter(/databases/$(database)/documents/threads/$(threadId)).data.participantIds;
+
+        allow update, delete: if false;
+      }
+    }
+
+    // 4. On-demand 15KB-25KB WebP photo payloads (only fetched on tap)
+    match /photo_payloads/{payloadId} {
+      allow get: if isSignedIn() && isValidId(payloadId) && (request.auth.uid in resource.data.participantIds);
+      allow list: if isSignedIn() && (request.auth.uid in resource.data.participantIds);
+
+      allow create: if isSignedIn() &&
+                       isValidId(payloadId) &&
+                       incoming().senderId == request.auth.uid &&
+                       (request.auth.uid in incoming().participantIds) &&
+                       incoming().keys().hasAll(['senderId', 'threadId', 'participantIds', 'webpBase64', 'sizeBytes', 'width', 'height', 'createdAt']) &&
+                       incoming().keys().hasOnly(['senderId', 'threadId', 'participantIds', 'webpBase64', 'sizeBytes', 'width', 'height', 'createdAt']) &&
+                       isValidPhotoPayload(incoming()) &&
+                       existsAfter(/databases/$(database)/documents/threads/$(incoming().threadId)) &&
+                       incoming().participantIds == getAfter(/databases/$(database)/documents/threads/$(incoming().threadId)).data.participantIds;
+
+      allow update, delete: if false;
+    }
+  }
+}

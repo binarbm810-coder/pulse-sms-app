@@ -1,0 +1,6 @@
+{
+  "name": "PulseSMS",
+  "description": "Ultra-lightweight MQTT and Firestore SMS messenger with 15KB WebP tap-to-load photos and offline outbox queueing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

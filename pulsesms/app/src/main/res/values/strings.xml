@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">PulseSMS</string>
+    <string name="tagline_basic_mode">Zero-overhead MQTT &amp; SMS messenger</string>
+    <string name="sign_in_headline">Instant SMS on the thinnest signal</string>
+    <string name="sign_in_subtitle">Enter your Account Name and Phone Number to start texting right away on ultra-light MQTT &amp; 15 KB photos.</string>
+    <string name="btn_start_chatting">Start Chatting</string>
+    <string name="label_account_name">Account Name</string>
+    <string name="label_phone_number">Phone Number</string>
+    <string name="nav_chats">Chats</string>
+    <string name="nav_discover">People</string>
+    <string name="nav_network">Data &amp; MQTT</string>
+    <string name="hint_sms_composer">Type ultra-light SMS…</string>
+    <string name="label_basic_mode_badge">BASIC MODE</string>
+    <string name="error_invalid_phone">Enter a valid phone number (at least 6 digits).</string>
+    <string name="error_invalid_name">Account name must be 2–40 characters.</string>
+</resources>
