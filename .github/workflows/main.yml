@@ -13,18 +13,20 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Build Android APK
+      - name: Build with Gradle
+        uses: gradle/actions/setup-gradle@v3
+      - name: Build APK
         run: |
-          GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "No gradlew found! Listing files:"
-            find . -maxdepth 3
-            exit 1
+          if [ -f "./gradlew" ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug
+          elif [ -f "./pulsesms/gradlew" ]; then
+            cd pulsesms
+            chmod +x gradlew
+            ./gradlew assembleDebug
+          else
+            gradle assembleDebug
           fi
-          PROJECT_DIR=$(dirname "$GRADLEW_PATH")
-          cd "$PROJECT_DIR"
-          chmod +x gradlew
-          ./gradlew assembleDebug
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
