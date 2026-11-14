@@ -13,9 +13,18 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+      - name: Create missing .env files
+        run: |
+          BUILD_FILE=$(find . -name "build.gradle" -o -name "build.gradle.kts" | grep -v "/build/" | head -n 1)
+          if [ -n "$BUILD_FILE" ]; then
+            PROJECT_DIR=$(dirname "$BUILD_FILE")
+            touch "$PROJECT_DIR/.env"
+            touch "$PROJECT_DIR/.env.example"
+            echo "API_URL=https://example.com" >> "$PROJECT_DIR/.env"
+            echo "API_URL=https://example.com" >> "$PROJECT_DIR/.env.example"
+          fi
       - name: Find and Build APK
         run: |
-          # Find the directory containing build.gradle or build.gradle.kts
           BUILD_FILE=$(find . -name "build.gradle" -o -name "build.gradle.kts" | grep -v "/build/" | head -n 1)
           if [ -z "$BUILD_FILE" ]; then
             echo "Error: build.gradle not found!"
