@@ -13,7 +13,7 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Create missing .env files
+      - name: Create missing env and keystore files
         run: |
           BUILD_FILE=$(find . -name "build.gradle" -o -name "build.gradle.kts" | grep -v "/build/" | head -n 1)
           if [ -n "$BUILD_FILE" ]; then
@@ -22,6 +22,11 @@ jobs:
             touch "$PROJECT_DIR/.env.example"
             echo "API_URL=https://example.com" >> "$PROJECT_DIR/.env"
             echo "API_URL=https://example.com" >> "$PROJECT_DIR/.env.example"
+            
+            # Generate debug.keystore if missing
+            if [ ! -f "$PROJECT_DIR/debug.keystore" ]; then
+              keytool -genkey -v -keystore "$PROJECT_DIR/debug.keystore" -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US" || true
+            fi
           fi
       - name: Find and Build APK
         run: |
