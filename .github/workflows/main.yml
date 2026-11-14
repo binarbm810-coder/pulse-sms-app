@@ -13,26 +13,25 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Build APK without Cache
+      - name: Find and Build APK
         run: |
+          # Find the directory containing build.gradle or build.gradle.kts
+          BUILD_FILE=$(find . -name "build.gradle" -o -name "build.gradle.kts" | grep -v "/build/" | head -n 1)
+          if [ -z "$BUILD_FILE" ]; then
+            echo "Error: build.gradle not found!"
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$BUILD_FILE")
+          echo "Found project directory: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
+          
           if [ -f "./gradlew" ]; then
             chmod +x gradlew
             ./gradlew assembleDebug
-          elif [ -f "./pulsesms/gradlew" ]; then
-            cd pulsesms
+          else
+            gradle wrapper
             chmod +x gradlew
             ./gradlew assembleDebug
-          else
-            echo "Searching for gradlew..."
-            GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
-            if [ -n "$GRADLEW_PATH" ]; then
-              DIR=$(dirname "$GRADLEW_PATH")
-              cd "$DIR"
-              chmod +x gradlew
-              ./gradlew assembleDebug
-            else
-              gradle assembleDebug
-            fi
           fi
       - name: Upload APK
         uses: actions/upload-artifact@v4
