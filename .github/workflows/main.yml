@@ -13,9 +13,7 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-      - name: Build with Gradle
-        uses: gradle/actions/setup-gradle@v3
-      - name: Build APK
+      - name: Build APK without Cache
         run: |
           if [ -f "./gradlew" ]; then
             chmod +x gradlew
@@ -25,7 +23,16 @@ jobs:
             chmod +x gradlew
             ./gradlew assembleDebug
           else
-            gradle assembleDebug
+            echo "Searching for gradlew..."
+            GRADLEW_PATH=$(find . -name "gradlew" | head -n 1)
+            if [ -n "$GRADLEW_PATH" ]; then
+              DIR=$(dirname "$GRADLEW_PATH")
+              cd "$DIR"
+              chmod +x gradlew
+              ./gradlew assembleDebug
+            else
+              gradle assembleDebug
+            fi
           fi
       - name: Upload APK
         uses: actions/upload-artifact@v4
